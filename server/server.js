@@ -1,80 +1,50 @@
-// Import required modules
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
 const cors = require('cors');
 
-// Initialize the app
 const app = express();
 
+// Enable CORS
 app.use(cors({
-    origin: 'http://localhost:3001'  // Allow requests from your React app
-  }));
-// Define a storage strategy using multer
+  origin: 'http://localhost:3001'  // React frontend URL
+}));
+
+const fs = require('fs');
+
+// Automatically create the uploads folder if it doesn't exist
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+  console.log('Uploads folder created');
+} else {
+  console.log('Uploads folder already exists');
+}
+
+// Set up storage for multer
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Define the upload folder
-    cb(null, './uploads');
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/'); // Ensure this folder exists
   },
-  filename: (req, file, cb) => {
-    // Create a unique file name
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname); // Give the file a unique name
   }
 });
 
-// Create the multer upload middleware with storage settings
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
-  fileFilter: (req, file, cb) => {
-    // Accept only certain file types (e.g., images)
-    const fileTypes = /jpeg|jpg|png|gif/;
-    const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimeType = fileTypes.test(file.mimetype);
+const upload = multer({ storage: storage });
 
-    if (extname && mimeType) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Only images are allowed!'));
-    }
-  }
-});
-
-// Serve the uploads folder statically
-app.use('/uploads', express.static('uploads'));
-
-// Route to upload a single file
+// Single file upload route
 app.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) {
-    return res.status(400).send('No file uploaded');
+    return res.status(400).send({ success: false, message: 'No file uploaded' });
   }
-  res.send({
-    message: 'File uploaded successfully',
-    file: req.file
-  });
+  res.send({ success: true, message: 'File uploaded successfully', file: req.file });
 });
 
-// Route to upload multiple files (e.g., 3 files)
-app.post('/uploads', upload.array('files', 3), (req, res) => {
+// Multiple files upload route
+app.post('/uploads', upload.array('files', 10), (req, res) => {
   if (!req.files || req.files.length === 0) {
-    return res.status(400).send('No files uploaded');
+    return res.status(400).send({ success: false, message: 'No files uploaded' });
   }
-  res.send({
-    message: 'Files uploaded successfully',
-    files: req.files
-  });
-});
-
-// Error handling middleware for multer
-app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    // A Multer error occurred when uploading.
-    res.status(500).send({ error: err.message });
-  } else if (err) {
-    // An unknown error occurred when uploading.
-    res.status(500).send({ error: err.message });
-  }
+  res.send({ success: true, message: 'Files uploaded successfully', files: req.files });
 });
 
 // Start the server
